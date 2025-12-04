@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secure Chat</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div id="auth-box">
+      <h2>Login</h2>
+      <input type="text" id="login-username" placeholder="Username">
+      <input type="password" id="login-password" placeholder="Password">
+      <label><input type="checkbox" id="usb-login"> USB inserted</label>
+      <button onclick="login()">Login</button>
+      <hr>
+      <h2>Register</h2>
+      <input type="text" id="reg-username" placeholder="Username">
+      <input type="password" id="reg-password" placeholder="Password">
+      <input type="file" id="profile_pic">
+      <input type="text" id="reg-usb" placeholder="USB Key (optional)">
+      <button onclick="register()">Register</button>
+    </div>
+
+    <div id="chat-box" style="display:none;">
+      <div id="online-users"></div>
+      <div id="messages"></div>
+      <div id="typing"></div>
+      <input type="text" id="message-input" placeholder="Type a message" oninput="typing()">
+      <button onclick="sendMessage()">Send</button>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+<script>
+const socket = io();
+let currentUser='';
+
+// Register
+function register(){
+  const username=document.getElementById('reg-username').value;
+  const password=document.getElementById('reg-password').value;
+  const usb_key=document.getElementById('reg-usb').value;
+  const profile_pic=document.getElementById('profile_pic').files[0];
+
+  const formData=new FormData();
+  formData.append('username',username);
+  formData.append('password',password);
+  formData.append('usb_key',usb_key);
+  if(profile_pic) formData.append('profile_pic',profile_pic);
+
+  fetch('/register',{method:'POST',body:formData})
+  .then(res=>res.json())
+  .then(data=>alert(data.message || 'Registered successfully'))
+  .catch(err=>console.error(err));
+}
+
+// Login
+function login(){
+  const username=document.getElementById('login-username').value;
+  const password=document.getElementById('login-password').value;
+  const usb_present=document.getElementById('usb-login').checked;
+
+  fetch('/login',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username,password,usb_present})
+  })
+  .then(res=>res.json())
+  .then(data=>{
+    if(data.success){
+      currentUser=username;
+      document.getElementById('auth-box').style.display='none';
+      document.getElementById('chat-box').style.display='block';
+      loadMessages();
+      socket.emit('userOnline',username);
+    } else alert(data.message);
+  });
+}
+
+// Load messages
+function loadMessages(){
+  fetch('/messages')
+  .then(res=>res.json())
+  .then(data=>{
+    const messages=document.getElementById('messages');
+    messages.innerHTML='';
+    data.forEach(m=>{
+      const div=document.createElement('div');
+      div.textContent=`${m.sender}: ${m.message}`;
+      messages.appendChild(div);
+    });
+  });
+}
+
+// Send message
+function sendMessage(){
+  const input=document.getElementById('message-input');
+  const msg=input.value;
+  if(!msg) return;
+  fetch('/message',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({sender:currentUser,message:msg})
+  }).then(res=>res.json())
+  .then(()=>input.value='');
+}
+
+// Typing
+function typing(){ socket.emit('userTyping',currentUser); }
+
+// Logout
+function logout(){ location.reload(); }
+
+// Socket.io events
+socket.on('newMessage',m=>{
+  const messages=document.getElementById('messages');
+  const div=document.createElement('div');
+  div.textContent=`${m.sender}: ${m.message}`;
+  messages.appendChild(div);
+});
+
+socket.on('updateOnline',users=>{
+  document.getElementById('online-users').textContent='Online: '+users.join(', ');
+});
+
+socket.on('userTyping',username=>{
+  document.getElementById('typing').textContent=username+' is typing...';
+  setTimeout(()=>document.getElementById('typing').textContent='',2000);
+});
+</script>
+</body>
+</html>
