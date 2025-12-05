@@ -38,8 +38,6 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // DATABASE AUTO-DETECT SYSTEM
 // ----------------------------
 
-// If Railway gives DATABASE_URL → use PostgreSQL
-// Otherwise → fallback to SQLite (local)
 let dbType = "";
 let pool = null;
 let sqliteDB = null;
